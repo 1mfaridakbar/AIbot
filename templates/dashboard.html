@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Trading Bot Dashboard</title>
+    <style>
+        /* Basic Styling for the Dashboard - (Sama seperti sebelumnya, tidak perlu diubah kecuali Anda ingin) */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #eef2f7;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+        }
+
+        .dashboard-container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 900px; /* Lebarkan sedikit untuk tabel */
+            box-sizing: border-box;
+            margin-top: 50px;
+        }
+
+        h1, h2 {
+            color: #007bff;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.2em;
+            font-weight: 600;
+        }
+
+        h2 {
+            font-size: 1.6em;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .data-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); /* Sesuaikan lebar kolom */
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .data-item {
+            background-color: #f8fafd;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #e0e6ed;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .data-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+        }
+
+        .data-label {
+            font-weight: 700;
+            color: #555;
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.95em;
+        }
+
+        .data-value {
+            font-size: 1.5em;
+            color: #2c3e50;
+        }
+
+        .positive {
+            color: #28a745;
+        }
+
+        .negative {
+            color: #dc3545;
+        }
+
+        .status-message {
+            text-align: center;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-size: 1.1em;
+            color: #333;
+            background-color: #ffc10720;
+            border: 1px solid #ffc10750;
+        }
+
+        .error-message {
+            background-color: #dc354520;
+            border: 1px solid #dc354550;
+            color: #dc3545;
+        }
+
+        /* Styling for tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            border-radius: 8px;
+            overflow: hidden; /* For rounded corners on tables */
+        }
+
+        th, td {
+            border: 1px solid #e0e6ed;
+            padding: 12px 15px;
+            text-align: left;
+            font-size: 0.9em;
+        }
+
+        th {
+            background-color: #007bff;
+            color: white;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f9fbfd; /* Lighter background for even rows */
+        }
+
+        tr:hover {
+            background-color: #eaf3ff; /* Highlight row on hover */
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .dashboard-container {
+                padding: 15px;
+                margin-top: 15px;
+            }
+
+            .data-grid {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                font-size: 1.8em;
+            }
+
+            h2 {
+                font-size: 1.4em;
+            }
+
+            th, td {
+                padding: 8px 10px;
+                font-size: 0.8em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <h1>📈 Bot Trading Dashboard</h1>
+
+        <div id="dashboard-data" class="data-grid">
+            <div class="status-message">Loading core data...</div>
+        </div>
+
+        <h2 id="profit-summary-heading" style="display: none;">Profit Summary by Pair</h2>
+        <div id="profit-by-pair" class="data-grid">
+            </div>
+
+        <h2 id="recent-trades-heading" style="display: none;">Recent Trades</h2>
+        <div id="recent-trades-table-container">
+            <table id="recent-trades-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Type</th>
+                        <th>Pair</th>
+                        <th>Amount</th>
+                        <th>Price</th>
+                        <th>IDR Value</th>
+                        <th>P&L</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td colspan="8" class="status-message">Loading recent trades...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="status-message" id="last-updated">Last Updated: Never</div>
+    </div>
+
+    <script>
+        function formatNumber(num) {
+            return parseFloat(num).toLocaleString('id-ID', {
+                minimumFractionDigits: 0, // Minimal digit setelah koma
+                maximumFractionDigits: 8  // Maksimal digit setelah koma (untuk kripto)
+            });
+        }
+
+        function fetchDashboardData() {
+            fetch('/api/dashboard_data')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    const dashboardDiv = document.getElementById('dashboard-data');
+                    const profitByPairDiv = document.getElementById('profit-by-pair');
+                    const recentTradesTableBody = document.getElementById('recent-trades-table').getElementsByTagName('tbody')[0];
+                    const lastUpdatedDiv = document.getElementById('last-updated');
+                    
+                    const profitSummaryHeading = document.getElementById('profit-summary-heading');
+                    const recentTradesHeading = document.getElementById('recent-trades-heading');
+
+
+                    if (data.error) {
+                        dashboardDiv.innerHTML = `<div class="status-message error-message">Error: ${data.error}</div>`;
+                        profitByPairDiv.innerHTML = ''; // Clear existing content
+                        recentTradesTableBody.innerHTML = `<tr><td colspan="8" class="status-message error-message">Error loading trades.</td></tr>`;
+                        profitSummaryHeading.style.display = 'none';
+                        recentTradesHeading.style.display = 'none';
+                        return;
+                    }
+
+                    // --- Update Main Dashboard Data ---
+                    let profitClass = '';
+                    // Convert to raw number for comparison
+                    const totalProfitRaw = parseFloat(data.total_profit_idr.replace(/[^0-9,-]+/g,"").replace(",", ".")); 
+                    if (totalProfitRaw > 0) {
+                        profitClass = 'positive';
+                    } else if (totalProfitRaw < 0) {
+                        profitClass = 'negative';
+                    }
+
+                    let percentageProfitClass = '';
+                    const percentageProfitRaw = parseFloat(data.percentage_profit.replace('%', ''));
+                    if (percentageProfitRaw > 0) {
+                        percentageProfitClass = 'positive';
+                    } else if (percentageProfitRaw < 0) {
+                        percentageProfitClass = 'negative';
+                    }
+                    
+                    dashboardDiv.innerHTML = `
+                        <div class="data-item">
+                            <span class="data-label">Saldo IDR Saat Ini:</span>
+                            <span class="data-value">${data.current_balance_idr}</span>
+                        </div>
+                        <div class="data-item">
+                            <span class="data-label">Saldo BTC Saat Ini:</span>
+                            <span class="data-value">${data.current_balance_btc}</span>
+                        </div>
+                        <div class="data-item">
+                            <span class="data-label">Harga BTC/IDR Saat Ini:</span>
+                            <span class="data-value">${data.current_btc_price}</span>
+                        </div>
+                        <div class="data-item">
+                            <span class="data-label">Total Nilai Aset (IDR):</span>
+                            <span class="data-value">${data.total_asset_value_idr}</span>
+                        </div>
+                        <div class="data-item">
+                            <span class="data-label">Total Keuntungan Global:</span>
+                            <span class="data-value ${profitClass}">${data.total_profit_idr}</span>
+                        </div>
+                        <div class="data-item">
+                            <span class="data-label">Persentase Keuntungan Global:</span>
+                            <span class="data-value ${percentageProfitClass}">${data.percentage_profit}</span>
+                        </div>
+                    `;
+
+                    // --- Update Profit by Pair ---
+                    profitByPairDiv.innerHTML = ''; // Clear previous data
+                    const profitPairs = Object.keys(data.profit_by_pair);
+                    if (profitPairs.length > 0) {
+                        profitSummaryHeading.style.display = 'block'; // Show heading
+                        for (const pair of profitPairs) {
+                            const pairProfit = data.profit_by_pair[pair];
+                            let pairProfitClass = '';
+                            const pairProfitRaw = parseFloat(pairProfit.replace(/[^0-9,-]+/g,"").replace(",", "."));
+                            if (pairProfitRaw > 0) {
+                                pairProfitClass = 'positive';
+                            } else if (pairProfitRaw < 0) {
+                                pairProfitClass = 'negative';
+                            }
+                            profitByPairDiv.innerHTML += `
+                                <div class="data-item">
+                                    <span class="data-label">Profit ${pair.toUpperCase()}:</span>
+                                    <span class="data-value ${pairProfitClass}">${pairProfit}</span>
+                                </div>
+                            `;
+                        }
+                    } else {
+                        profitSummaryHeading.style.display = 'none'; // Hide heading if no data
+                        profitByPairDiv.innerHTML = `<div class="status-message">No profit summary data yet.</div>`;
+                    }
+
+
+                    // --- Update Recent Trades Table ---
+                    recentTradesTableBody.innerHTML = ''; // Clear previous data
+                    if (data.recent_trades.length > 0) {
+                        recentTradesHeading.style.display = 'block'; // Show heading
+                        data.recent_trades.forEach(trade => {
+                            let tradeProfitClass = '';
+                            // Only apply class if profit_loss is a number
+                            if (trade.profit_loss !== "N/A") {
+                                const tradeProfitRaw = parseFloat(trade.profit_loss.replace(/[^0-9,-]+/g,"").replace(",", "."));
+                                if (tradeProfitRaw > 0) {
+                                    tradeProfitClass = 'positive';
+                                } else if (tradeProfitRaw < 0) {
+                                    tradeProfitClass = 'negative';
+                                }
+                            }
+
+                            recentTradesTableBody.innerHTML += `
+                                <tr>
+                                    <td>${trade.timestamp}</td>
+                                    <td>${trade.type}</td>
+                                    <td>${trade.pair}</td>
+                                    <td>${trade.amount}</td>
+                                    <td>${trade.price}</td>
+                                    <td>${trade.quote_amount}</td>
+                                    <td class="${tradeProfitClass}">${trade.profit_loss}</td>
+                                    <td>${trade.status}</td>
+                                </tr>
+                            `;
+                        });
+                    } else {
+                        recentTradesHeading.style.display = 'none'; // Hide heading if no data
+                        recentTradesTableBody.innerHTML = `<tr><td colspan="8" class="status-message">No recent trades found.</td></tr>`;
+                    }
+
+
+                    lastUpdatedDiv.textContent = `Last Updated: ${new Date().toLocaleTimeString()}`;
+                })
+                .catch(error => {
+                    console.error('Error fetching dashboard data:', error);
+                    document.getElementById('dashboard-data').innerHTML = `<div class="status-message error-message">Failed to load core data. Please check console for details.</div>`;
+                    document.getElementById('profit-by-pair').innerHTML = '';
+                    document.getElementById('recent-trades-table').getElementsByTagName('tbody')[0].innerHTML = `<tr><td colspan="8" class="status-message error-message">Failed to load trades.</td></tr>`;
+                    document.getElementById('last-updated').textContent = `Last Updated: Error`;
+                    // Hide headings on error
+                    document.getElementById('profit-summary-heading').style.display = 'none';
+                    document.getElementById('recent-trades-heading').style.display = 'none';
+                });
+        }
+
+        // Fetch data initially and then every 30 seconds
+        fetchDashboardData();
+        setInterval(fetchDashboardData, 30000); // Refresh every 30 seconds
+    </script>
+</body>
+</html>
