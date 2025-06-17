@@ -12,6 +12,46 @@ class DatabaseManager:
         self.conn = None # Koneksi database
         self._initialize_db()
 
+    def clear_feature_data(self, pair):
+        """Menghapus semua data fitur untuk pair tertentu agar bisa di-refresh."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("DELETE FROM feature_data WHERE pair = ?", (pair,))
+            conn.commit()
+            print(f"Cleared old feature data for {pair}.")
+            return True
+        except sqlite3.Error as e:
+            print(f"Error clearing feature data: {e}")
+            return False
+
+    def insert_feature_data_batch(self, data):
+        """Memasukkan data fitur dalam jumlah besar (batch)."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        query = '''
+            INSERT OR IGNORE INTO feature_data (
+                pair, timestamp, open, high, low, close, volume,
+                rsi_14, macd_12_26_9, macdh_12_26_9, macds_12_26_9,
+                bb_lower_20_2, bb_middle_20_2, bb_upper_20_2,
+                atr_14, adx_14, ema_20, ema_50
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        '''
+        try:
+            cursor.executemany(query, data)
+            conn.commit()
+            return True
+        except sqlite3.Error as e:
+            print(f"Error inserting feature data batch: {e}")
+            return False
+        
+    def get_feature_data(self, pair):
+        """Mengambil semua data fitur dari database."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM feature_data WHERE pair = ?", (pair,))
+        return cursor.fetchall()
+
     def _get_connection(self):
         """Mendapatkan koneksi ke database. Membuat koneksi jika belum ada."""
         if self.conn is None:
@@ -63,6 +103,31 @@ class DatabaseManager:
                 pair TEXT PRIMARY KEY,
                 total_realized_profit REAL DEFAULT 0.0,
                 last_updated INTEGER NOT NULL
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS feature_data (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pair TEXT NOT NULL,
+                timestamp INTEGER NOT NULL,
+                open REAL NOT NULL,
+                high REAL NOT NULL,
+                low REAL NOT NULL,
+                close REAL NOT NULL,
+                volume REAL NOT NULL,
+                rsi_14 REAL,
+                macd_12_26_9 REAL,
+                macdh_12_26_9 REAL,
+                macds_12_26_9 REAL,
+                bb_lower_20_2 REAL,
+                bb_middle_20_2 REAL,
+                bb_upper_20_2 REAL,
+                atr_14 REAL,
+                adx_14 REAL,
+                ema_20 REAL,
+                ema_50 REAL,
+                UNIQUE(pair, timestamp)
             )
         ''')
 

@@ -3,12 +3,13 @@
 import time
 import os
 import pandas as pd
-import pandas_ta as ta # -> Import library baru untuk indikator teknikal
+import pandas_ta as ta 
 from datetime import datetime
 from indodax_api import IndodaxAPI
 from database import DatabaseManager
 from dotenv import load_dotenv
-import config 
+from notifier import send_notification
+import config
 
 load_dotenv()
 
@@ -176,6 +177,15 @@ class TradingBot:
                         timestamp=int(time.time()), order_id=buy_order_result['return'].get('order_id'),
                         status="open", notes=trade_note
                     )
+                    buy_message = (
+                        f"✅ *PEMBELIAN BERHASIL*\n\n"
+                        f"*{self.pair.upper()}*\n"
+                        f"Harga: `{current_price:,.0f} IDR`\n"
+                        f"Jumlah: `{self.trade_amount_idr:,.0f} IDR`"
+                    )
+
+                    send_notification(buy_message)
+                    
                     print(f"BUY order successful! Reloading open positions from DB...")
                     self.last_trade_type = "BUY"
                     self._load_open_positions_from_db()
@@ -197,6 +207,16 @@ class TradingBot:
                         status="closed", profit_loss=profit_loss,
                         associated_buy_id=position_to_sell['buy_id'], notes=trade_note
                     )
+
+                    sell_message = (
+                        f"{profit_emoji} *PENJUALAN BERHASIL*\n\n"
+                        f"*{self.pair.upper()}*\n"
+                        f"Harga Jual: `{current_price:,.0f} IDR`\n"
+                        f"Profit/Loss: `{profit_loss:,.2f} IDR`\n\n"
+                        f"Alasan: _{reason}_"
+                    )
+                    send_notification(sell_message)
+
                     self.db_manager.close_buy_trade(position_to_sell['buy_id'])
                     self.db_manager.update_profit_summary(self.pair, profit_loss)
                     print(f"SELL order successful! Profit/Loss: {profit_loss:,.2f} IDR. Reloading positions...")
@@ -222,6 +242,8 @@ class TradingBot:
                         print("Holding position based on strategy.")
             except Exception as e:
                 print(f"An error occurred during bot run: {e}")
+                error_message = f"❌ *ERROR KRITIS PADA BOT*\n\nTerjadi error yang menghentikan siklus bot:\n`{e}`\n\nMohon periksa log untuk detail."
+                send_notification(error_message)
                 import traceback
                 traceback.print_exc()
             time.sleep(interval_seconds)
